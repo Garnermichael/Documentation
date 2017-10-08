@@ -1,2 +1,2 @@
 # Documentation
-This should contain linuc install documentation.
+This should contain linux install documentation.
