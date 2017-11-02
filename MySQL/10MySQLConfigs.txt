@@ -3,7 +3,6 @@
 The InnoDB buffer pool size this is the #1 setting to look at for any installation using InnoDB. The buffer pool is where data and indexes are cached; having it as large as possible will ensure you use memory and not disks for most read operations.
 
 
-
 2. INNODB LOG FILE SIZE
 
 innodb_log-file-size is the size of the redo logs, which are used to make sure writes are fast and durable. There are two general suggestions for InnoDB log file sizing:  
