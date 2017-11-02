@@ -1,0 +1,147 @@
+1. INNODB BUFFER POOL SIZE
+
+The InnoDB buffer pool size this is the #1 setting to look at for any installation using InnoDB. The buffer pool is where data and indexes are cached; having it as large as possible will ensure you use memory and not disks for most read operations.
+
+
+
+2. INNODB LOG FILE SIZE
+
+innodb_log-file-size is the size of the redo logs, which are used to make sure writes are fast and durable. There are two general suggestions for InnoDB log file sizing:  
+•Set combined total size of InnoDB log files greater than 25–50% of the InnoDB buffer pool size
+
+or
+•Set combined InnoDB log file log size equal to one hour’s worth of log entries during peak load 
+
+Larger log files can lead to slower recovery in the event of a server crash. However, they also reduce the number of checkpoints needed and reduce disk I/O.
+
+Evaluate the size of one hour’s worth of binary logs under operational load, then decide whether to increase the size of the InnoDB log files. 
+
+Getting the innodb log file sizes right is important to achieve good system performance. MariaDB’s InnoDB storage engine uses a fixed size (circular) redo log space. The size is controlled by innodb_log_file_size and innodb_log_files_in_group (default 2). Multiply those values to get the redo log space that available for use. While technically it shouldn’t matter whether you use the innodb_log_file_size or innodb_log_files_in_group variable to control the redo space size, most people just work with the innodb_log_file_size and leave innodb_log_files_in_group alone. 
+
+InnoDB’s redo space size is one of the most important configuration options for write-intensive workloads. However, it comes with trade-offs. The more redo space configured, the better InnoDB can optimize write I/O. However, increasing the redo space also means longer recovery times when the system loses power or crashes for other reasons. 
+
+
+
+3. INNODB LOG BUFFER SIZE
+
+A larger InnoDB log buffer size means less disk I/O for larger transactions. It is suggested to set this to 64M on all servers.
+
+
+
+4. INNODB LOG FLUSH INTERVAL
+
+The innodb_flush_log_at_trx_commit variable controls when flushing of the log buffer to disk occurs. innodb_flush_log_at_trx_commit = 1 (default) flushes the log buffer to disk at each transaction commit. This is the safest but also the least performant option.  
+
+innodb_flush_log_at_trx_commit = 0 flushes the log buffer to disk every second, but nothing on transaction commit. Up to one second (possibly more due to process scheduling) could be lost. If there’s any crash, MySQL or the server can lose data. This is the fastest but least safe option.
+
+innodb_flush_log_at_trx_commit = 2 writes the log buffer out to file on each commit but flushes to disk every second. If the disk cache has a battery backup (for instance a battery backed cache raid controller) this is generally the best balance of performance and safety. A crash of MySQL should not lose data. A server crash or power outage could lose up to a second (possibly more due to process scheduling). A battery-backed cache reduces this possibility.
+
+We suggest using the first option for safety.
+
+
+
+5. INNODB IO CAPACITY
+
+innodb_io_capacity should be set to approximately the maximum number of IOPS the underlying storage can handle.
+
+By default this is set to 1000. We recommend to benchmarking the storage to determine whether you can increase this value further.
+
+
+
+6. THREAD CACHE SIZE
+
+Monitor the value of Threads_created. If it continues increasing at more than a few threads per minute, increase the value of thread_cache_size.
+
+The thread cache size is set to 200 in the current default configuration.
+
+
+
+7. TABLE CACHE AND TABLE DEFINITION CACHE
+
+The table_open_cache and table_defintion_cache variables control the number of tables and definitions to keep open for all threads.
+
+Monitor Open_tables, Open_table_defintitions, Opened_tables, and Opened_table_definitions to determine the best value. The general suggestion is to set table_open_cache (and subsequently table_definition_cache) only high enough to reduce the rate of increase of the Opened_tables (and Opened_table_definitions) status value.
+
+Both table_open_cache and table_defintion_cache are set to 2048 in the default configuration.
+
+
+
+8. QUERY CACHE
+
+The query cache is a well-known bottleneck that can be seen even when concurrency is moderate. The best option is to disable it from day one by setting query_cache_size = 0 (the default in MariaDB 10) and to use other ways to speed up read queries: having good indexing, adding replicas to spread the read load or using an external cache (memcache or redis, for instance). If you have already built your MariaDB application with the query cache enabled and have never noticed any problem, the query cache may be beneficial for you. In that case, be cautious if you decide to disable it.
+
+
+
+9. TEMPORARY TABLES, TMP_TABLE_SIZE, AND MAX_HEAP_TABLE_SIZE
+
+MySQL uses the lower of max_heap_table_size and tmp_table_size to limit the size of temporary tables in memory. These are per client variables. While having this value large can help reduce the number of temporary tables created on disk, it also raises the risk of reaching the server's memory capacity since this is per client. Generally 32M to 64M is the suggested value to begin with for both variables and tune as needed.
+
+Temporary tables are often used for GROUP BY, ORDER BY, DISTINCT, UNION, sub queries, etc. Ideally, MySQL should create these in memory, with as few on disk as possible.
+
+It is important to note that queries not using joins appropriately and creating large temporary tables can be one reason for a higher number of temporary tables on disk. Another reason is the memory storage engine uses fixed length columns and assumes the worst-case scenario. If columns are not sized correctly (for example, a VARCHAR(255) for a short string), this influences the size of the table in memory and can cause it to go to disk earlier than it should. Also, temporary tables with blob and text columns will immediately go to disk, as the memory storage engine does not support them.
+
+Both are currently set to 64M by default.
+
+
+
+10. WARNING LOG LEVEL
+
+We recommend setting the warning log level this to log_warnings = 2. Doing so logs information about aborted connections and access-denied errors.
+
+
+
+11. MAX CONNECTIONS
+
+If you are often facing the "Too many connections" error, max_connections is too low. Frequently, because the application does not close connections to the database correctly, you need much more than the default 151 connections. The main drawback of high values for max_connections (say, 1,000 or more) is that the server will become unresponsive if it must run that many active transactions. Using a connection pool at the application level or a thread pool at the MariaDB level can help here.
+
+
+
+12. TRANSACTION ISOLATION
+
+Investigate the available transaction isolation levels, and determine the best transaction isolation for your server’s use case.
+
+
+
+13. BINARY LOG FORMAt
+
+We recommend using the ROW binary log format for master-master replication.
+
+
+
+14. AUTO-INCREMENT OFFSETS
+
+To help reduce the chances of collision between two masters being written to simultaneously, the auto increment and auto increment offset values need to be adjusted accordingly. 
+
+
+
+15. SYNC BINLOG
+
+By default, the OS handles flushing the binlog to disk. In the event of a server crash, it is possible to lose transactions from the binary log, leading to replication being out sync. Setting sync_binlog = 1 causes the binlog file to be flushed on every commit.
+
+This is slower, but the safest option.
+
+
+
+16. CRASH SAFE(R) SLAVES
+
+To help avoid replication errors after a slave crash, enable relay log recover and syncing of the relay log and relay log info files to disk.
+
+
+
+17. LOG SLAVE UPDATES
+
+To have chained replication (master -> slave -> slave), log_slave_updates needs to be enabled. This tells a slave to write replicated transactions to its own binary log so that they can then be replicated to slaves off of it.
+
+
+
+18. READ-ONLY SLAVES
+
+Slaves should be read-only to avoid data accidentally being written to them.
+
+Note: Users with super privileges can still write when the server is read-only.
+
+
+
+19. SLAVE NET TIMEOUT
+
+The slave_net_timeout variable is the number of seconds the slave will wait for a packet from the master before trying to reconnect. The default is 3600 (1 hour). This means if the link goes down and isn’t detected, it could be up to an hour before the slave reconnects. This could lead to the slave suddenly being up to an hour behind the master.
